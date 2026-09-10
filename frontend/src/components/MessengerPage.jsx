@@ -895,9 +895,14 @@ const MessengerPage = ({
     });
 
     socket.on('messages_read', (data) => {
-      if (activePartner && !activePartner.isGroup && data.readerId === activePartner._id) {
+      const activePartnerId = activePartner?._id?.toString();
+      const readerId = data?.readerId?.toString();
+      const myId = currentUser?._id?.toString();
+
+      if (activePartner && !activePartner.isGroup && readerId && activePartnerId && readerId === activePartnerId) {
         setMessages((prev) => prev.map(msg => {
-          if (msg.sender === currentUser?._id && !msg.isRead) {
+          const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
+          if (msgSenderId && myId && msgSenderId === myId && !msg.isRead) {
             return { ...msg, isRead: true };
           }
           return msg;
@@ -1058,7 +1063,11 @@ const MessengerPage = ({
         const history = await res.json();
         setMessages(history);
         if (!partner.isGroup && socket) {
-          socket.emit('read_messages', { senderId: partner._id, receiverId: currentUser?._id });
+          const partnerId = partner._id ? partner._id.toString() : '';
+          const myId = currentUser?._id ? currentUser._id.toString() : '';
+          if (partnerId && myId) {
+            socket.emit('read_messages', { senderId: partnerId, receiverId: myId });
+          }
         }
         window.dispatchEvent(new CustomEvent('messages_read_update'));
       }
@@ -2311,11 +2320,9 @@ const MessengerPage = ({
                 </div>
               ) : (
                 messages.map((msg, i) => {
-                  const isUser = msg.sender && (
-                    typeof msg.sender === 'object' 
-                      ? msg.sender._id === currentUser?._id 
-                      : msg.sender === currentUser?._id
-                  );
+                  const myId = currentUser?._id ? currentUser._id.toString() : '';
+                  const msgSenderId = msg.sender && (typeof msg.sender === 'object' ? (msg.sender._id ? msg.sender._id.toString() : '') : msg.sender.toString());
+                  const isUser = Boolean(myId && msgSenderId && msgSenderId === myId);
                   const senderName = isUser 
                     ? (currentUser?.name || 'Me') 
                     : (activePartner.isGroup 
@@ -2449,24 +2456,30 @@ const MessengerPage = ({
 
                           {/* Status Indicator for user's own last message */}
                           {isUser && isLastMessage && (
-                            <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-1 text-right flex items-center justify-end gap-1 select-none">
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-1.5 text-right flex items-center justify-end select-none">
                               {msg.isRead ? (
-                                <>
-                                  {!activePartner.isGroup && activePartner.profilePic ? (
+                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/20 shadow-xs">
+                                  <CheckCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
+                                  <span className="text-[10px] font-black">Seen</span>
+                                  {!activePartner.isGroup && activePartner.profilePic && (
                                     <img 
                                       src={getProfilePicUrl(activePartner.profilePic)} 
                                       alt="seen" 
-                                      className="w-3.5 h-3.5 rounded-full object-cover border border-white dark:border-slate-900"
-                                      title="Seen"
+                                      className="w-3.5 h-3.5 rounded-full object-cover border border-white dark:border-slate-800 shrink-0"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
-                                  ) : (
-                                    <span className="text-emerald-500 font-extrabold">Seen</span>
                                   )}
-                                </>
+                                </div>
                               ) : onlineUsers.includes(activePartner._id?.toString()) ? (
-                                <span className="text-[#7C3AED] font-extrabold">Delivered</span>
+                                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-slate-400 dark:text-slate-400">
+                                  <CheckCheck className="w-3 h-3 text-slate-400" strokeWidth={2} />
+                                  <span className="text-[10px] font-bold">Delivered</span>
+                                </div>
                               ) : (
-                                <span className="text-slate-400 font-extrabold">Sent</span>
+                                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-slate-400 dark:text-slate-500">
+                                  <Check className="w-3 h-3 text-slate-400" strokeWidth={2} />
+                                  <span className="text-[10px] font-medium">Sent</span>
+                                </div>
                               )}
                             </div>
                           )}

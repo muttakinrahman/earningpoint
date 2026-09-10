@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getImageUrl } from '../../config';
+import VerifiedBadge from '../../components/VerifiedBadge';
 
 const Pill = ({ label, color }) => (
   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${color}`}>{label}</span>
@@ -146,18 +148,28 @@ const Users = ({ ADMIN_API, authHeaders }) => {
                 <tr key={u._id} className="hover:bg-slate-800/30 transition-colors group">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                        {(u.name || u.phoneOrEmail || '?')[0].toUpperCase()}
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 border border-slate-700 shadow-xs">
+                        {(() => {
+                          const avatar = u.profilePic || u.googleAvatar || u.facebookAvatar;
+                          return avatar ? (
+                            <img
+                              src={getImageUrl(avatar)}
+                              alt={u.name || 'User'}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : null;
+                        })()}
+                        <span className="select-none">{(u.name || u.phoneOrEmail || '?')[0].toUpperCase()}</span>
                       </div>
                       <div className="min-w-0">
-                        <div className="text-white font-semibold text-xs flex items-center gap-1 truncate max-w-[120px]">
+                        <div className="text-white font-semibold text-xs flex items-center gap-1.5 truncate max-w-[150px]">
+                          <span className="truncate">{u.name || 'No Name'}</span>
                           {(u.verificationBadge === 'blue' || u.verificationBadge === 'purple' || u.verificationBadge === 'golden') && (
-                            <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-black ${u.verificationBadge === 'golden' ? 'bg-amber-500 text-white' : 'bg-purple-600 text-white'}`}>
-                              ✓
-                            </span>
+                            <VerifiedBadge type={u.verificationBadge} iconClassName="w-3.5 h-3.5 inline-block shrink-0" />
                           )}
                         </div>
-                        <div className="text-slate-500 text-[10px] truncate max-w-[120px]">{u.phoneOrEmail}</div>
+                        <div className="text-slate-500 text-[10px] truncate max-w-[150px]">{u.username ? `@${u.username}` : u.phoneOrEmail}</div>
                       </div>
                     </div>
                   </td>
@@ -219,20 +231,39 @@ const Users = ({ ADMIN_API, authHeaders }) => {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedUser(null)} />
           <div className="relative z-10 bg-[#111827] border border-slate-700 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-              <div>
-                <h3 className="text-white font-bold text-base flex items-center gap-2">
-                  {selectedUser.user.name || 'User Detail'}
-                  <button 
-                    onClick={() => window.open(`${window.location.origin}?profileId=${selectedUser.user._id}`, '_blank')}
-                    className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors"
-                    title="View Public Profile"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </button>
-                </h3>
-                <p className="text-slate-500 text-xs">{selectedUser.user.phoneOrEmail}</p>
+              <div className="flex items-center gap-3">
+                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 border border-slate-700 shadow-md">
+                  {(() => {
+                    const avatar = selectedUser.user.profilePic || selectedUser.user.googleAvatar || selectedUser.user.facebookAvatar;
+                    return avatar ? (
+                      <img
+                        src={getImageUrl(avatar)}
+                        alt={selectedUser.user.name || 'User'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : null;
+                  })()}
+                  <span className="select-none">{(selectedUser.user.name || selectedUser.user.phoneOrEmail || '?')[0].toUpperCase()}</span>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-base flex items-center gap-1.5">
+                    <span>{selectedUser.user.name || 'User Detail'}</span>
+                    {(selectedUser.user.verificationBadge === 'blue' || selectedUser.user.verificationBadge === 'purple' || selectedUser.user.verificationBadge === 'golden') && (
+                      <VerifiedBadge type={selectedUser.user.verificationBadge} iconClassName="w-4 h-4 inline-block shrink-0" />
+                    )}
+                    <button 
+                      onClick={() => window.open(`${window.location.origin}?profileId=${selectedUser.user._id}`, '_blank')}
+                      className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors"
+                      title="View Public Profile"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                  </h3>
+                  <p className="text-slate-500 text-xs">{selectedUser.user.phoneOrEmail}</p>
+                </div>
               </div>
               <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

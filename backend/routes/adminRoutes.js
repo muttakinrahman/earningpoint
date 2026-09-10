@@ -18,9 +18,9 @@ router.delete('/sub-admins/:id', adminProtect, requireSuperAdmin, adminControlle
 // Dashboard
 router.get('/stats', adminProtect, requirePermission('dashboard'), adminController.getDashboardStats);
 
-// Users
-router.get('/activity', adminProtect, requirePermission('users'), adminController.getActivityReports);
-router.get('/activity/user/:id', adminProtect, requirePermission('users'), adminController.getUserActivityDetail);
+// Users & Activity
+router.get('/activity', adminProtect, adminController.getActivityReports);
+router.get('/activity/user/:id', adminProtect, adminController.getUserActivityDetail);
 router.get('/users', adminProtect, requirePermission('users'), adminController.getUsers);
 router.get('/users/:id', adminProtect, requirePermission('users'), adminController.getUser);
 router.put('/users/:id', adminProtect, requirePermission('users'), adminController.updateUser);

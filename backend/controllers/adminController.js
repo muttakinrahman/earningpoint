@@ -1980,8 +1980,11 @@ exports.getActivityReports = async (req, res) => {
     const topUser = allResults[0] ? {
       name: allResults[0].userDetails.name,
       username: allResults[0].userDetails.username,
-      verificationBadge: allResults[0].userDetails.verificationBadge || 'none',
-      formattedTime: formatSecondsToDuration(allResults[0].totalActiveSeconds)
+      profilePic: allResults[0].userDetails.profilePic || allResults[0].userDetails.googleAvatar || allResults[0].userDetails.facebookAvatar || '',
+      verificationBadge: allResults[0].userDetails.verificationBadge || (allResults[0].userDetails.isVerified ? 'purple' : 'none'),
+      isVerified: Boolean(allResults[0].userDetails.isVerified || (allResults[0].userDetails.verificationBadge && allResults[0].userDetails.verificationBadge !== 'none')),
+      formattedTime: formatSecondsToDuration(allResults[0].totalActiveSeconds),
+      activeSeconds: allResults[0].totalActiveSeconds
     } : null;
 
     res.json({

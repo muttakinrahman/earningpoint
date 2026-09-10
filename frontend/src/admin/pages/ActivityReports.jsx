@@ -34,8 +34,8 @@ const ActivityReports = ({ ADMIN_API, authHeaders }) => {
   const [selectedUserDetail, setSelectedUserDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
+  const fetchReports = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const params = new URLSearchParams({
         page,
@@ -66,12 +66,16 @@ const ActivityReports = ({ ADMIN_API, authHeaders }) => {
     } catch (err) {
       console.error('Failed to fetch activity reports:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   }, [ADMIN_API, authHeaders, page, selectedRange, customDate, search, platform, verifiedOnly, sortBy]);
 
   useEffect(() => {
-    fetchReports();
+    fetchReports(false);
+    const interval = setInterval(() => {
+      fetchReports(true);
+    }, 10000); // Live 10s auto-refresh
+    return () => clearInterval(interval);
   }, [fetchReports]);
 
   // View user detailed 30-day logs
@@ -137,9 +141,14 @@ const ActivityReports = ({ ADMIN_API, authHeaders }) => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black select-none">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>LIVE (10s auto-sync)</span>
+          </div>
+
           <button
             type="button"
-            onClick={fetchReports}
+            onClick={() => fetchReports(false)}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 active:scale-95 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -253,22 +262,43 @@ const ActivityReports = ({ ADMIN_API, authHeaders }) => {
 
         {/* Top User */}
         <div className="bg-[#111827] border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Top User Today</p>
+          <div className="min-w-0 flex-1 mr-2">
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Top User ({reports?.selectedDateLabel || 'Today'})</p>
             {reports?.summary?.topUser ? (
-              <>
-                <h3 className="text-sm font-black text-amber-400 mt-1 truncate max-w-[140px]">
-                  {reports.summary.topUser.name || 'User'}
-                </h3>
-                <p className="text-[11px] text-white font-bold mt-0.5">
-                  ⏱️ {reports.summary.topUser.formattedTime}
-                </p>
-              </>
+              <div className="mt-2 flex items-center gap-2.5">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 border border-amber-500/30 shadow-xs">
+                  {reports.summary.topUser.profilePic ? (
+                    <img
+                      src={getImageUrl(reports.summary.topUser.profilePic)}
+                      alt={reports.summary.topUser.name || 'User'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : null}
+                  <span className="select-none">{(reports.summary.topUser.name || '?')[0].toUpperCase()}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1 truncate">
+                    <h3 className="text-sm font-black text-amber-400 truncate">
+                      {reports.summary.topUser.name || 'User'}
+                    </h3>
+                    {reports.summary.topUser.isVerified && (
+                      <VerifiedBadge 
+                        type={reports.summary.topUser.verificationBadge || 'purple'} 
+                        iconClassName="w-3.5 h-3.5 inline-block shrink-0" 
+                      />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-emerald-400 font-bold font-mono mt-0.5">
+                    ⏱️ {reports.summary.topUser.formattedTime}
+                  </p>
+                </div>
+              </div>
             ) : (
               <h3 className="text-sm font-bold text-slate-500 mt-2">No activity yet</h3>
             )}
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
             <Award className="w-6 h-6" />
           </div>
         </div>
@@ -391,12 +421,16 @@ const ActivityReports = ({ ADMIN_API, authHeaders }) => {
                       {/* User Info with Verified Badge */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="relative shrink-0">
-                            <img
-                              src={item.profilePic ? getImageUrl(item.profilePic) : `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'U')}&background=6366f1&color=fff`}
-                              alt={item.name}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-700"
-                            />
+                          <div className="relative w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shrink-0 border border-slate-700 shadow-xs">
+                            {item.profilePic ? (
+                              <img
+                                src={getImageUrl(item.profilePic)}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            ) : null}
+                            <span className="select-none">{(item.name || item.phoneOrEmail || '?')[0].toUpperCase()}</span>
                             {item.isOnline && (
                               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900 animate-pulse" title="Online now" />
                             )}

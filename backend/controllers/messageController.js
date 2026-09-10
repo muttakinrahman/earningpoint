@@ -126,10 +126,22 @@ exports.getChatHistory = async (req, res) => {
       .populate('sender', 'name profilePic username isEmailVerified verificationBadge');
 
     // Mark messages received from this user as read
-    await Message.updateMany(
+    const updateResult = await Message.updateMany(
       { sender: otherUserId, receiver: currentUserId, isRead: false },
       { $set: { isRead: true } }
     );
+
+    if (updateResult && updateResult.modifiedCount > 0) {
+      try {
+        const socketIo = require('../socket');
+        const io = socketIo.getIO();
+        if (io) {
+          io.to(otherUserId.toString()).emit('messages_read', { readerId: currentUserId.toString() });
+        }
+      } catch (socketErr) {
+        // Ignore if socket not ready
+      }
+    }
 
     res.json(messages);
   } catch (error) {

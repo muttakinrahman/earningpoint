@@ -253,6 +253,21 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Screen Time & Activity Tracking
+  totalScreenTimeSeconds: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  lastActiveAt: {
+    type: Date,
+    default: Date.now,
+  },
+  lastPlatform: {
+    type: String,
+    enum: ['web', 'android', 'ios'],
+    default: 'web',
+  },
   // Push Notification Device Tokens (FCM)
   fcmTokens: [{
     token: { type: String, required: true },

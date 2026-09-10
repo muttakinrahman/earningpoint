@@ -789,8 +789,8 @@ exports.getGlobalSettings = async (req, res) => {
       fortuneWheelConfig: settings.fortuneWheelConfig,
       admobConfig: settings.admobConfig,
       appUpdateConfig: (settings.appUpdateConfig && settings.appUpdateConfig.latestAppVersion) ? settings.appUpdateConfig : {
-        latestAppVersion: '1.0.8',
-        minAppVersion: '1.0.8',
+        latestAppVersion: '1.1.9',
+        minAppVersion: '1.1.9',
         forceUpdate: true,
         updateNotes: 'New high-speed updates, curved screen layout fix, and performance enhancements are available! Please update now from Google Play Store.'
       },

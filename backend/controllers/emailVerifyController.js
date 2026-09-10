@@ -12,10 +12,17 @@ exports.sendOTP = async (req, res) => {
       return res.status(400).json({ message: 'Valid email address required.' });
     }
 
-    // Check if email already verified by someone else
-    const existingUser = await User.findOne({ verifiedEmail: email.toLowerCase(), isEmailVerified: true });
-    if (existingUser && existingUser._id.toString() !== req.user._id.toString()) {
-      return res.status(400).json({ message: 'This email is already verified by another account.' });
+    const cleanEmail = email.toLowerCase().trim();
+    // Check if email already verified or registered by another account
+    const existingUser = await User.findOne({
+      _id: { $ne: req.user._id },
+      $or: [
+        { verifiedEmail: cleanEmail, isEmailVerified: true },
+        { phoneOrEmail: cleanEmail }
+      ]
+    });
+    if (existingUser) {
+      return res.status(400).json({ message: 'This email address is already in use by another account.' });
     }
 
     const otp = generateOTP();

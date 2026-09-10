@@ -11,7 +11,8 @@ import {
   EyeOff, 
   RotateCw,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  AlertCircle
 } from 'lucide-react';
 import { API_BASE } from '../config';
 
@@ -416,9 +417,19 @@ const ForgotPasswordPage = ({ onBack }) => {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">
               Enter 6-Digit Code
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mb-6 leading-relaxed">
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mb-4 leading-relaxed">
               We sent a verification code to <span className="font-bold text-purple-600 dark:text-purple-400">{maskedTarget}</span>.
             </p>
+
+            {/* Spam Folder Notice for Email */}
+            {(deliveryType === 'email' || authMethod === 'email' || maskedTarget?.includes('@')) && (
+              <div className="p-3 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-left flex items-start gap-2.5 mb-5">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] sm:text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
+                  <span className="font-bold">Can't find the email?</span> Please check your <span className="font-bold underline decoration-amber-500">Spam or Junk</span> folder. If found there, tap <span className="font-bold text-amber-800 dark:text-amber-100">"Report Not Spam"</span> or move it to your Inbox.
+                </div>
+              </div>
+            )}
 
             {/* 6-digit OTP Input Boxes */}
             <div className="flex justify-between gap-1.5 sm:gap-2 mb-6" onPaste={handleOtpPaste}>

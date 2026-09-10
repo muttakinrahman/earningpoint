@@ -105,10 +105,10 @@ const GlobalSettingSchema = new mongoose.Schema({
   },
   // App Version & Force Update Configuration
   appUpdateConfig: {
-    latestAppVersion: { type: String, default: '1.0.4' },
-    minAppVersion: { type: String, default: '1.0.3' },
+    latestAppVersion: { type: String, default: '1.1.9' },
+    minAppVersion: { type: String, default: '1.1.9' },
     forceUpdate: { type: Boolean, default: false },
-    updateNotes: { type: String, default: 'New features, performance enhancements & bug fixes are available!' }
+    updateNotes: { type: String, default: 'New features, performance enhancements & bug fixes are available on Google Play Store!' }
   },
   // Referral Campaign Configuration
   referralCampaignTarget: {

@@ -52,16 +52,21 @@ exports.savePhone = async (req, res) => {
     }
 
     const formattedCode = countryCode.trim().startsWith('+') ? countryCode.trim() : `+${countryCode.trim()}`;
-    const fullPhone = `${formattedCode}${cleanNumber}`;
+    const phoneVariants = [fullPhone, cleanNumber];
+    if (cleanNumber.startsWith('0')) {
+      phoneVariants.push(`${formattedCode}${cleanNumber.substring(1)}`);
+    }
 
     const existingUser = await User.findOne({
       _id: { $ne: req.user._id },
-      verifiedPhone: fullPhone,
-      isPhoneVerified: true,
+      $or: [
+        { verifiedPhone: { $in: phoneVariants }, isPhoneVerified: true },
+        { phoneOrEmail: { $in: phoneVariants } }
+      ]
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: 'This phone number is already registered on another Zenivio account.' });
+      return res.status(400).json({ message: 'This phone number is already in use by another account.' });
     }
 
     const user = await User.findById(req.user._id);
@@ -103,14 +108,21 @@ exports.sendPhoneOTP = async (req, res) => {
     const formattedCode = countryCode.trim().startsWith('+') ? countryCode.trim() : `+${countryCode.trim()}`;
     const fullPhone = `${formattedCode}${cleanNumber}`;
 
+    const phoneVariants = [fullPhone, cleanNumber];
+    if (cleanNumber.startsWith('0')) {
+      phoneVariants.push(`${formattedCode}${cleanNumber.substring(1)}`);
+    }
+
     const existingUser = await User.findOne({
       _id: { $ne: req.user._id },
-      verifiedPhone: fullPhone,
-      isPhoneVerified: true,
+      $or: [
+        { verifiedPhone: { $in: phoneVariants }, isPhoneVerified: true },
+        { phoneOrEmail: { $in: phoneVariants } }
+      ]
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: 'This phone number is already verified on another Zenivio account.' });
+      return res.status(400).json({ message: 'This phone number is already in use by another account.' });
     }
 
     const otp = generateOTP();
@@ -213,12 +225,14 @@ exports.sendEmailOTP = async (req, res) => {
 
     const existingUser = await User.findOne({
       _id: { $ne: user._id },
-      verifiedEmail: cleanEmail,
-      isEmailVerified: true,
+      $or: [
+        { verifiedEmail: cleanEmail, isEmailVerified: true },
+        { phoneOrEmail: cleanEmail }
+      ]
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: 'This email is already verified on another Zenivio account.' });
+      return res.status(400).json({ message: 'This email address is already in use by another account.' });
     }
 
     const otp = generateOTP();

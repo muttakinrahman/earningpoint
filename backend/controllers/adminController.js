@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const UserActivity = require('../models/UserActivity');
 const Article = require('../models/Article');
 const Transaction = require('../models/Transaction');
 const Referral = require('../models/Referral');
@@ -1805,3 +1806,253 @@ exports.deleteSubAdmin = async (req, res) => {
   }
 };
 
+
+
+// ─── Screen Time & Activity Reports ──────────────────────────────────────────
+
+const formatSecondsToDuration = (seconds = 0) => {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hrs = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hrs > 0) {
+    return `${hrs} hr ${mins} min ${secs} sec`;
+  }
+  if (mins > 0) {
+    return `${mins} min ${secs} sec`;
+  }
+  return `${secs} sec`;
+};
+
+const getDhakaDate = (d = new Date()) => {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+};
+
+// @desc    Get user screen time & activity reports
+// @route   GET /api/admin/activity
+// @access  Private (Admin)
+exports.getActivityReports = async (req, res) => {
+  try {
+    const { 
+      date, 
+      range = 'today', 
+      search = '', 
+      platform = 'all', 
+      verifiedOnly = 'false',
+      sortBy = 'time_desc', 
+      page = 1, 
+      limit = 30 
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 30));
+
+    const now = new Date();
+    let targetDates = [];
+    let selectedDateLabel = date || getDhakaDate(now);
+
+    if (date) {
+      targetDates = [date];
+      selectedDateLabel = date;
+    } else if (range === 'yesterday') {
+      const yDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const yStr = getDhakaDate(yDate);
+      targetDates = [yStr];
+      selectedDateLabel = yStr;
+    } else if (range === '7days') {
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        targetDates.push(getDhakaDate(d));
+      }
+      selectedDateLabel = 'Last 7 Days';
+    } else if (range === '30days') {
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        targetDates.push(getDhakaDate(d));
+      }
+      selectedDateLabel = 'Last 30 Days';
+    } else if (range === 'all') {
+      targetDates = null;
+      selectedDateLabel = 'All Time';
+    } else {
+      const todayStr = getDhakaDate(now);
+      targetDates = [todayStr];
+      selectedDateLabel = todayStr;
+    }
+
+    const matchQuery = {};
+    if (targetDates && targetDates.length > 0) {
+      if (targetDates.length === 1) {
+        matchQuery.date = targetDates[0];
+      } else {
+        matchQuery.date = { $in: targetDates };
+      }
+    }
+    if (platform && platform !== 'all') {
+      matchQuery.platform = platform;
+    }
+
+    const pipeline = [
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: '$userId',
+          totalActiveSeconds: { $sum: '$activeSeconds' },
+          lastPingAt: { $max: '$lastPingAt' },
+          platform: { $last: '$platform' },
+          activeDaysCount: { $addToSet: '$date' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userDetails'
+        }
+      },
+      { $unwind: '$userDetails' }
+    ];
+
+    if (search && search.trim()) {
+      const reg = new RegExp(search.trim(), 'i');
+      pipeline.push({
+        $match: {
+          $or: [
+            { 'userDetails.name': reg },
+            { 'userDetails.username': reg },
+            { 'userDetails.phoneOrEmail': reg }
+          ]
+        }
+      });
+    }
+
+    if (verifiedOnly === 'true') {
+      pipeline.push({
+        $match: {
+          $or: [
+            { 'userDetails.verificationBadge': { $in: ['golden', 'purple', 'blue'] } },
+            { 'userDetails.isVerified': true }
+          ]
+        }
+      });
+    }
+
+    let sortStage = { totalActiveSeconds: -1 };
+    if (sortBy === 'time_asc') sortStage = { totalActiveSeconds: 1 };
+    else if (sortBy === 'recent') sortStage = { lastPingAt: -1 };
+    else if (sortBy === 'name') sortStage = { 'userDetails.name': 1 };
+    pipeline.push({ $sort: sortStage });
+
+    const allResults = await UserActivity.aggregate(pipeline);
+    const totalUsersCount = allResults.length;
+    const totalCombinedSeconds = allResults.reduce((acc, curr) => acc + (curr.totalActiveSeconds || 0), 0);
+    const avgSeconds = totalUsersCount > 0 ? Math.round(totalCombinedSeconds / totalUsersCount) : 0;
+
+    const paginatedResults = allResults.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    const nowMs = Date.now();
+    const formattedUsers = paginatedResults.map((item, idx) => {
+      const u = item.userDetails;
+      const isOnline = item.lastPingAt ? (nowMs - new Date(item.lastPingAt).getTime() < 3 * 60 * 1000) : false;
+      const rank = (pageNum - 1) * limitNum + idx + 1;
+
+      return {
+        rank,
+        userId: u._id,
+        name: u.name || 'User',
+        username: u.username || '',
+        phoneOrEmail: u.phoneOrEmail || '',
+        profilePic: u.profilePic || u.googleAvatar || u.facebookAvatar || '',
+        verificationBadge: u.verificationBadge || (u.isVerified ? 'purple' : 'none'),
+        isVerified: Boolean(u.isVerified || (u.verificationBadge && u.verificationBadge !== 'none')),
+        activeSeconds: item.totalActiveSeconds,
+        formattedTime: formatSecondsToDuration(item.totalActiveSeconds),
+        totalLifetimeSeconds: u.totalScreenTimeSeconds || item.totalActiveSeconds,
+        formattedLifetimeTime: formatSecondsToDuration(u.totalScreenTimeSeconds || item.totalActiveSeconds),
+        platform: item.platform || 'web',
+        lastPingAt: item.lastPingAt,
+        isOnline,
+        activeDays: item.activeDaysCount ? item.activeDaysCount.length : 1
+      };
+    });
+
+    const topUser = allResults[0] ? {
+      name: allResults[0].userDetails.name,
+      username: allResults[0].userDetails.username,
+      verificationBadge: allResults[0].userDetails.verificationBadge || 'none',
+      formattedTime: formatSecondsToDuration(allResults[0].totalActiveSeconds)
+    } : null;
+
+    res.json({
+      success: true,
+      selectedDateLabel,
+      summary: {
+        totalActiveUsers: totalUsersCount,
+        totalCombinedSeconds,
+        formattedTotalTime: formatSecondsToDuration(totalCombinedSeconds),
+        avgSeconds,
+        formattedAvgTime: formatSecondsToDuration(avgSeconds),
+        topUser
+      },
+      users: formattedUsers,
+      pagination: {
+        total: totalUsersCount,
+        page: pageNum,
+        pages: Math.ceil(totalUsersCount / limitNum) || 1,
+        limit: limitNum
+      }
+    });
+  } catch (err) {
+    console.error('getActivityReports error:', err);
+    res.status(500).json({ message: 'Failed to retrieve activity reports', error: err.message });
+  }
+};
+
+// @desc    Get detailed user screen time history (last 30 days breakdown)
+// @route   GET /api/admin/activity/user/:id
+// @access  Private (Admin)
+exports.getUserActivityDetail = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      'name username phoneOrEmail profilePic googleAvatar facebookAvatar verificationBadge isVerified totalScreenTimeSeconds lastActiveAt createdAt'
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const dailyLogs = await UserActivity.find({ userId: req.params.id })
+      .sort({ date: -1 })
+      .limit(30);
+
+    const formattedLogs = dailyLogs.map(log => ({
+      _id: log._id,
+      date: log.date,
+      activeSeconds: log.activeSeconds,
+      formattedTime: formatSecondsToDuration(log.activeSeconds),
+      platform: log.platform || 'web',
+      lastPingAt: log.lastPingAt
+    }));
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        name: user.name || 'User',
+        username: user.username,
+        phoneOrEmail: user.phoneOrEmail,
+        profilePic: user.profilePic || user.googleAvatar || user.facebookAvatar || '',
+        verificationBadge: user.verificationBadge || (user.isVerified ? 'purple' : 'none'),
+        isVerified: Boolean(user.isVerified || (user.verificationBadge && user.verificationBadge !== 'none')),
+        totalLifetimeSeconds: user.totalScreenTimeSeconds || 0,
+        formattedLifetimeTime: formatSecondsToDuration(user.totalScreenTimeSeconds || 0),
+        lastActiveAt: user.lastActiveAt,
+        joinedDate: user.createdAt
+      },
+      dailyLogs: formattedLogs
+    });
+  } catch (err) {
+    console.error('getUserActivityDetail error:', err);
+    res.status(500).json({ message: 'Failed to retrieve user activity details' });
+  }
+};

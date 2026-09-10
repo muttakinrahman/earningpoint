@@ -27,9 +27,9 @@ router.get('/saved', protect, postController.getSavedPosts);
 router.get('/:id', postController.getPostById);
 
 // @route   POST /api/posts
-// @desc    Create a user post (with optional image or video)
+// @desc    Create a user post (with optional image(s) or video)
 // @access  Private
-router.post('/', protect, upload.single('image'), postController.createUserPost);
+router.post('/', protect, upload.any(), postController.createUserPost);
 
 // @route   POST /api/posts/:id/like
 // @desc    Toggle like on a post
@@ -74,7 +74,7 @@ router.delete('/:id', protect, postController.deleteUserPost);
 // @route   PUT /api/posts/:id
 // @desc    Update a post by user
 // @access  Private
-router.put('/:id', protect, upload.single('image'), postController.updateUserPost);
+router.put('/:id', protect, upload.any(), postController.updateUserPost);
 
 // @route   POST /api/posts/:id/report
 // @desc    Report a post (UGC)

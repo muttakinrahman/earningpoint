@@ -14,13 +14,12 @@ const resolveBadgeSize = (sz) => {
 };
 
 // Standardized Verification Check Across Entire Application
+// ONLY users who received a verificationBadge (golden, purple, blue) from Admin or ID verification get the badge next to their name.
 export const isUserVerified = (user) => {
   if (!user) return false;
   const badge = user.verificationBadge;
   if (badge && badge !== 'none') return true;
   if (user.isVerified) return true;
-  // Both Email and Phone are strictly required for 2-minute verification
-  if (user.isEmailVerified && user.isPhoneVerified) return true;
   return false;
 };
 

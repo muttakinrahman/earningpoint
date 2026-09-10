@@ -1,32 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RotateCw } from 'lucide-react';
 import { API_BASE } from '../config';
+import { ASTRONAUT_OFFLINE_IMAGE } from './offlineAstronautBase64';
 
 const OfflineScreen = ({ onRetrySuccess }) => {
   const [isRetrying, setIsRetrying] = useState(false);
   const [showErrorToast, setShowErrorToast] = useState(false);
+  const onlineTimerRef = useRef(null);
 
-  // Auto-dismiss if connection is restored in background
+  // Auto-dismiss safely ONLY if connection is truly restored and stable
   useEffect(() => {
-    const handleOnline = async () => {
-      const isAlive = await testConnection();
-      if (isAlive && onRetrySuccess) {
-        onRetrySuccess();
-      }
+    const handleOnline = () => {
+      if (onlineTimerRef.current) clearTimeout(onlineTimerRef.current);
+      onlineTimerRef.current = setTimeout(async () => {
+        const isAlive = await testConnection();
+        if (isAlive && onRetrySuccess) {
+          onRetrySuccess();
+        }
+      }, 1000);
     };
 
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      if (onlineTimerRef.current) clearTimeout(onlineTimerRef.current);
+    };
   }, [onRetrySuccess]);
 
   const testConnection = async () => {
-    if (!navigator.onLine) return false;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      // Quick ping to backend health endpoint or local origin
-      const pingUrl = API_BASE ? `${API_BASE}/api/health` : '/favicon.png';
+      // Quick ping to backend health endpoint or favicon
+      const pingUrl = API_BASE ? `${API_BASE}/api/health?_t=${Date.now()}` : `/favicon.png?_t=${Date.now()}`;
       const res = await fetch(pingUrl, {
         method: 'GET',
         cache: 'no-store',
@@ -34,8 +42,9 @@ const OfflineScreen = ({ onRetrySuccess }) => {
       });
       clearTimeout(timeoutId);
       return res.ok || res.status < 500;
-    } catch (e) {
-      return Boolean(navigator.onLine);
+    } catch {
+      // Must strictly return false if ping fails - NEVER return true when offline!
+      return false;
     }
   };
 
@@ -56,7 +65,7 @@ const OfflineScreen = ({ onRetrySuccess }) => {
         setShowErrorToast(true);
         setTimeout(() => setShowErrorToast(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setShowErrorToast(true);
       setTimeout(() => setShowErrorToast(false), 3000);
     } finally {
@@ -65,17 +74,14 @@ const OfflineScreen = ({ onRetrySuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[999999] bg-white dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+    <div className="fixed inset-0 z-[999999] bg-white dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden">
       <div className="flex flex-col items-center max-w-sm w-full mx-auto">
-        {/* Cute Astronaut Offline Illustration */}
+        {/* Exact Cute 3D Astronaut Offline Illustration (Embedded 0-request Data URI) */}
         <div className="w-56 sm:w-64 max-w-full mb-3 flex items-center justify-center">
           <img 
-            src="/offline-astronaut.png" 
+            src={ASTRONAUT_OFFLINE_IMAGE} 
             alt="No Internet Connection" 
-            className="w-full h-auto object-contain pointer-events-none drop-shadow-sm"
-            onError={(e) => {
-              e.target.src = '/no-internet.jpg';
-            }}
+            className="w-full h-auto object-contain pointer-events-none drop-shadow-sm select-none"
           />
         </div>
 
@@ -89,7 +95,7 @@ const OfflineScreen = ({ onRetrySuccess }) => {
           It seems you're offline. Please check your network connection and try again.
         </p>
 
-        {/* Try Again Button (Identical purple pill matching screenshot) */}
+        {/* Try Again Button (Matching exact purple pill style) */}
         <button
           type="button"
           onClick={handleRetry}
@@ -102,7 +108,7 @@ const OfflineScreen = ({ onRetrySuccess }) => {
 
         {/* Feedback Message if Still Offline */}
         {showErrorToast && (
-          <div className="mt-4 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 px-4 py-2 rounded-xl animate-fade-in">
+          <div className="mt-4 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 px-4 py-2 rounded-xl">
             Still offline. Please connect to Wi-Fi or Mobile Data and try again.
           </div>
         )}
@@ -112,3 +118,4 @@ const OfflineScreen = ({ onRetrySuccess }) => {
 };
 
 export default OfflineScreen;
+

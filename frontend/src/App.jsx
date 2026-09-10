@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { io } from 'socket.io-client';
 import AuthLayout from './components/AuthLayout';
 import RegistrationForm from './components/RegistrationForm';
@@ -13,13 +13,16 @@ import { Check, Loader2, X } from 'lucide-react';
 import { AdMob } from '@capacitor-community/admob';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { Network } from '@capacitor/network';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { AdMobService } from './utils/admob';
 import AppUpdateModal from './components/AppUpdateModal';
+import OfflineScreen from './components/OfflineScreen';
 import DesktopSidebarLeft from './components/DesktopSidebarLeft';
 import DesktopSidebarRight from './components/DesktopSidebarRight';
 import { playNotificationSound, triggerSystemNotification, triggerMessageNotification, requestNotificationPermissions } from './utils/sound';
 import { initPushNotifications, sendTokenToBackend, unregisterPushToken } from './utils/pushNotifications';
+import { initActivityTracker, stopActivityTracker } from './utils/activityTracker';
 
 // Lazy load other sub-pages/components to split bundle size and make initial load super fast
 const CartPage = lazy(() => import('./components/CartPage'));
@@ -140,6 +143,15 @@ function App() {
     });
   };
 
+  const [appUpdateConfig, setAppUpdateConfig] = useState(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const showUpdateModalRef = React.useRef(false);
+  const appUpdateConfigRef = React.useRef(null);
+  useEffect(() => {
+    showUpdateModalRef.current = showUpdateModal;
+    appUpdateConfigRef.current = appUpdateConfig;
+  }, [showUpdateModal, appUpdateConfig]);
+
   // Native back button listener
   const navigationHistoryRef = React.useRef(navigationHistory);
   useEffect(() => {
@@ -151,6 +163,12 @@ function App() {
     const registerListener = async () => {
       try {
         handler = await CapacitorApp.addListener('backButton', () => {
+          // If a force update is required, exit app immediately on back button press
+          if (showUpdateModalRef.current && appUpdateConfigRef.current?.forceUpdate) {
+            CapacitorApp.exitApp();
+            return;
+          }
+
           const customEvent = new CustomEvent('appBackButton', {
             cancelable: true,
             bubbles: true
@@ -276,6 +294,18 @@ function App() {
     }
   }, [isAuthenticated, currentUser]);
 
+  // Track user screen time & active duration across web & mobile app
+  useEffect(() => {
+    if (isAuthenticated) {
+      initActivityTracker();
+    } else {
+      stopActivityTracker();
+    }
+    return () => {
+      stopActivityTracker();
+    };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     // Clean up URL query parameters so they don't persist on page reload/navigation
     if (window.location.search) {
@@ -284,16 +314,77 @@ function App() {
     }
   }, []);
 
+  // ──────────────── INSTANT OFFLINE DETECTION ────────────────
+  // Use state initializer to check synchronously on first render
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+
+  useEffect(() => {
+    // Capacitor Network plugin for instant native detection (Android/iOS)
+    let networkListener = null;
+    const setupNativeListener = async () => {
+      try {
+        // Get initial status right away
+        const status = await Network.getStatus();
+        const offline = !status.connected;
+        setIsOffline(prev => prev !== offline ? offline : prev);
+
+        // Listen for changes — fires instantly on Android when network drops
+        networkListener = await Network.addListener('networkStatusChange', (status) => {
+          const offline = !status.connected;
+          setIsOffline(prev => prev !== offline ? offline : prev);
+        });
+      } catch {
+        // Fallback to browser events on web
+        const offline = !navigator.onLine;
+        setIsOffline(prev => prev !== offline ? offline : prev);
+      }
+    };
+
+    // Web browser fallback
+    const handleOnline = () => setIsOffline(prev => prev ? false : prev);
+    const handleOffline = () => setIsOffline(prev => !prev ? true : prev);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (Capacitor.isNativePlatform()) {
+      setupNativeListener();
+    } else {
+      // Also poll every 5s on web to ensure accuracy
+      const pollInterval = setInterval(() => {
+        const offline = !navigator.onLine;
+        setIsOffline(prev => prev !== offline ? offline : prev);
+      }, 5000);
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+        clearInterval(pollInterval);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (networkListener) networkListener.remove();
+    };
+  }, []);
+
+
+
+
   useEffect(() => {
     if (isAuthenticated && currentUser?._id) {
       const newSocket = io(API_BASE, {
         transports: ['websocket', 'polling'],
         timeout: 10000,
-        reconnectionAttempts: 3,
+        reconnectionAttempts: Infinity,       // Never stop trying to reconnect
+        reconnectionDelay: 1000,              // Start with 1s delay
+        reconnectionDelayMax: 10000,          // Max 10s between attempts
+        randomizationFactor: 0.3,
       });
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
+        // Join user room on every (re)connect — group rooms are rejoined by MessengerPage
         newSocket.emit('join_user_room', { userId: currentUser._id });
       });
 
@@ -451,9 +542,59 @@ function App() {
     return () => window.removeEventListener('zenivio_account_switched', handleAccountSwitched);
   }, []);
 
-  const CURRENT_APP_VERSION = '1.0.8';
-  const [appUpdateConfig, setAppUpdateConfig] = useState(null);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  // Helper: compare version strings. Returns positive if versionA > versionB, 0 if equal, negative if less
+  const compareVersions = (versionA, versionB) => {
+    const partsA = (versionA || '0').split('.').map(Number);
+    const partsB = (versionB || '0').split('.').map(Number);
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+      const a = partsA[i] || 0;
+      const b = partsB[i] || 0;
+      if (a !== b) return a - b;
+    }
+    return 0;
+  };
+
+  // Reusable Play Store update checker (Native Android Only)
+  const checkForAppUpdates = async (updateConfigFromSettings) => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      let config = updateConfigFromSettings;
+      if (!config) {
+        const res = await fetch(`${API_BASE}/api/earning/settings`);
+        const settings = await res.json();
+        config = settings?.appUpdateConfig;
+      }
+      if (!config) return;
+
+      let currentVersion = '1.2.0';
+      try {
+        const appInfo = await CapacitorApp.getInfo();
+        if (appInfo && appInfo.version) {
+          currentVersion = appInfo.version;
+        }
+      } catch (e) {
+        console.warn('Could not read native app version:', e);
+      }
+
+      const latest = config.latestAppVersion;
+      const minVersion = config.minAppVersion;
+
+      const isOlderThanLatest = latest && compareVersions(currentVersion, latest) < 0;
+      const isOlderThanMin = minVersion && compareVersions(currentVersion, minVersion) < 0;
+      const shouldForce = Boolean(isOlderThanMin || (config.forceUpdate && isOlderThanLatest));
+
+      if (isOlderThanLatest || isOlderThanMin) {
+        setAppUpdateConfig({
+          ...config,
+          currentVersion,
+          forceUpdate: shouldForce
+        });
+        setShowUpdateModal(true);
+      }
+    } catch (err) {
+      console.error('Check for app updates failed:', err);
+    }
+  };
 
   // Initialize AdMob & check for Play Store App updates (Native Android Only)
   useEffect(() => {
@@ -475,39 +616,31 @@ function App() {
           }
         }
         
-        // Play Store App Updates: ONLY check on Native Mobile App (never on Web Browser)
+        // Play Store App Updates: ONLY check on Native Mobile App
         if (Capacitor.isNativePlatform() && settings && settings.appUpdateConfig) {
-          const config = { ...settings.appUpdateConfig };
-          setAppUpdateConfig(config);
-          const latest = config.latestAppVersion;
-          
-          if (latest && config.forceUpdate === true) {
-            const currentParts = CURRENT_APP_VERSION.split('.').map(Number);
-            const latestParts = latest.split('.').map(Number);
-            
-            let isOutdated = false;
-            for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
-              const curr = currentParts[i] || 0;
-              const lat = latestParts[i] || 0;
-              if (lat > curr) {
-                isOutdated = true;
-                break;
-              } else if (lat < curr) {
-                break;
-              }
-            }
-
-            if (isOutdated) {
-              setShowUpdateModal(true);
-            }
-          }
+          checkForAppUpdates(settings.appUpdateConfig);
         }
       } catch (settingsErr) {
         console.error('Failed to load dynamic settings:', settingsErr);
       }
     };
     initAdMob();
+
+    // Re-check updates whenever app is resumed from background
+    let stateListener;
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          checkForAppUpdates();
+        }
+      }).then(l => { stateListener = l; });
+    }
+
+    return () => {
+      if (stateListener) stateListener.remove();
+    };
   }, []);
+
 
   // Back navigation — directly navigate without showing ads
   const showBackAd = (callback) => {
@@ -577,6 +710,15 @@ function App() {
 
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
+  // Show offline screen instantly when network is lost (after splash so animation still plays)
+  if (isOffline) {
+    return (
+      <OfflineScreen
+        onRetrySuccess={() => setIsOffline(false)}
+      />
+    );
   }
 
   const path = window.location.pathname.toLowerCase();
@@ -877,7 +1019,11 @@ function App() {
           {showUpdateModal && (
             <AppUpdateModal 
               updateConfig={appUpdateConfig} 
-              onClose={() => setShowUpdateModal(false)} 
+              onClose={() => {
+                if (!appUpdateConfig?.forceUpdate) {
+                  setShowUpdateModal(false);
+                }
+              }} 
             />
           )}
         </div>
@@ -890,7 +1036,11 @@ function App() {
       {showUpdateModal && (
         <AppUpdateModal 
           updateConfig={appUpdateConfig} 
-          onClose={() => setShowUpdateModal(false)} 
+          onClose={() => {
+            if (!appUpdateConfig?.forceUpdate) {
+              setShowUpdateModal(false);
+            }
+          }} 
         />
       )}
       {showForgotPassword ? (

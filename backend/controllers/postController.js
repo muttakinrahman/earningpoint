@@ -8,7 +8,7 @@ const enrichComments = (comments = []) => {
     const isUserPopulated = u && typeof u === 'object';
     const verificationBadge = (isUserPopulated && u.verificationBadge && u.verificationBadge !== 'none') 
       ? u.verificationBadge 
-      : (c.verificationBadge && c.verificationBadge !== 'none' ? c.verificationBadge : (isUserPopulated && u.isEmailVerified ? 'blue' : (c.isEmailVerified ? 'blue' : 'none')));
+      : (c.verificationBadge && c.verificationBadge !== 'none' ? c.verificationBadge : 'none');
     const isEmailVerified = Boolean(isUserPopulated ? u.isEmailVerified : c.isEmailVerified);
 
     const replies = (c.replies || []).map(r => {
@@ -16,7 +16,7 @@ const enrichComments = (comments = []) => {
       const isRuPopulated = ru && typeof ru === 'object';
       const rBadge = (isRuPopulated && ru.verificationBadge && ru.verificationBadge !== 'none')
         ? ru.verificationBadge
-        : (r.verificationBadge && r.verificationBadge !== 'none' ? r.verificationBadge : (isRuPopulated && ru.isEmailVerified ? 'blue' : (r.isEmailVerified ? 'blue' : 'none')));
+        : (r.verificationBadge && r.verificationBadge !== 'none' ? r.verificationBadge : 'none');
       const rVerified = Boolean(isRuPopulated ? ru.isEmailVerified : r.isEmailVerified);
       return {
         ...r,
@@ -321,21 +321,49 @@ exports.createUserPost = async (req, res) => {
   try {
     const { content, title, privacy, feeling, location, taggedFriends, bgGradient } = req.body;
     let imageUrl = null;
+    let imageUrls = [];
     let videoUrl = null;
 
     const { optimizeUploadedFileToWebp } = require('../utils/imageOptimizer');
 
-    if (req.file) {
-      if (req.file.mimetype.startsWith('video/')) {
+    const filesToProcess = [];
+    if (req.files && Array.isArray(req.files)) {
+      const imagesFiles = req.files.filter(f => f.fieldname === 'images');
+      if (imagesFiles.length > 0) {
+        filesToProcess.push(...imagesFiles);
+      } else {
+        filesToProcess.push(...req.files);
+      }
+    } else if (req.files && typeof req.files === 'object') {
+      if (req.files.images && Array.isArray(req.files.images)) {
+        filesToProcess.push(...req.files.images);
+      } else {
+        Object.values(req.files).forEach(fArr => {
+          if (Array.isArray(fArr)) filesToProcess.push(...fArr);
+        });
+      }
+    } else if (req.file) {
+      filesToProcess.push(req.file);
+    }
+
+    for (const f of filesToProcess) {
+      if (f.mimetype && f.mimetype.startsWith('video/')) {
         return res.status(400).json({ 
           message: 'The video option is currently unavailable. However, it will be available very soon.' 
         });
       }
-      const webpFilename = await optimizeUploadedFileToWebp(req.file.path, 2048, 2048, 92);
-      imageUrl = `/api/image?file=${webpFilename || req.file.filename}`;
+      const webpFilename = await optimizeUploadedFileToWebp(f.path, 2048, 2048, 92);
+      const url = `/api/image?file=${webpFilename || f.filename}`;
+      imageUrls.push(url);
     }
 
-    if (!content && !imageUrl && !videoUrl) {
+    imageUrls = Array.from(new Set(imageUrls));
+
+    if (imageUrls.length > 0) {
+      imageUrl = imageUrls[0];
+    }
+
+    if (!content && imageUrls.length === 0 && !videoUrl) {
       return res.status(400).json({ message: 'Content or media is required' });
     }
 
@@ -352,10 +380,11 @@ exports.createUserPost = async (req, res) => {
       content,
       title: title || null,
       image: imageUrl,
+      images: imageUrls,
       video: videoUrl,
       authorId: req.user._id,
       authorName: req.user.name || 'User',
-      isVerified: req.user.isEmailVerified || false,
+      isVerified: Boolean(req.user.isVerified || (req.user.verificationBadge && req.user.verificationBadge !== 'none')),
       privacy: privacy || 'public',
       feeling: feeling || null,
       location: location || null,
@@ -569,7 +598,7 @@ exports.commentPost = async (req, res) => {
       user: req.user._id,
       userName: req.user.name || 'User',
       userAvatar: req.user.profilePic || req.user.googleAvatar || req.user.facebookAvatar || '',
-      verificationBadge: req.user.verificationBadge || (req.user.isEmailVerified ? 'blue' : 'none'),
+      verificationBadge: req.user.verificationBadge || 'none',
       isEmailVerified: Boolean(req.user.isEmailVerified),
       text,
       createdAt: new Date()
@@ -654,7 +683,7 @@ exports.replyComment = async (req, res) => {
       user: req.user._id,
       userName: req.user.name || 'User',
       userAvatar: req.user.profilePic || req.user.googleAvatar || req.user.facebookAvatar || '',
-      verificationBadge: req.user.verificationBadge || (req.user.isEmailVerified ? 'blue' : 'none'),
+      verificationBadge: req.user.verificationBadge || 'none',
       isEmailVerified: Boolean(req.user.isEmailVerified),
       text,
       replyToUser: replyToUser || comment.userName || '',
@@ -807,7 +836,7 @@ exports.getPostReactions = async (req, res) => {
       reactionsList = post.reactions.map(r => {
         const u = r.user;
         if (!u) return null;
-        const badge = (u.verificationBadge && u.verificationBadge !== 'none') ? u.verificationBadge : (u.isEmailVerified ? 'blue' : 'none');
+        const badge = (u.verificationBadge && u.verificationBadge !== 'none') ? u.verificationBadge : 'none';
         return {
           _id: u._id,
           name: u.name,
@@ -822,7 +851,7 @@ exports.getPostReactions = async (req, res) => {
     } else {
       reactionsList = (post.likes || []).map(u => {
         if (!u) return null;
-        const badge = (u.verificationBadge && u.verificationBadge !== 'none') ? u.verificationBadge : (u.isEmailVerified ? 'blue' : 'none');
+        const badge = (u.verificationBadge && u.verificationBadge !== 'none') ? u.verificationBadge : 'none';
         return {
           _id: u._id,
           name: u.name,
@@ -960,29 +989,57 @@ exports.updateUserPost = async (req, res) => {
     const { content, title, privacy, feeling, location, taggedFriends, bgGradient } = req.body;
 
     let imageUrl = post.image;
+    let imageUrls = post.images && post.images.length > 0 ? [...post.images] : (post.image ? [post.image] : []);
     let videoUrl = post.video;
 
-    if (req.file) {
-      if (req.file.mimetype.startsWith('video/')) {
-        videoUrl = `/api/image?file=${req.file.filename}`;
-        imageUrl = null; // Clear image if new video uploaded
+    const filesToProcess = [];
+    if (req.files && Array.isArray(req.files)) {
+      const imagesFiles = req.files.filter(f => f.fieldname === 'images');
+      if (imagesFiles.length > 0) {
+        filesToProcess.push(...imagesFiles);
       } else {
-        const { optimizeUploadedFileToWebp } = require('../utils/imageOptimizer');
-        const webpFilename = await optimizeUploadedFileToWebp(req.file.path, 2048, 2048, 92);
-        imageUrl = `/api/image?file=${webpFilename || req.file.filename}`;
-        videoUrl = null; // Clear video if new image uploaded
+        filesToProcess.push(...req.files);
+      }
+    } else if (req.files && typeof req.files === 'object') {
+      if (req.files.images && Array.isArray(req.files.images)) {
+        filesToProcess.push(...req.files.images);
+      } else {
+        Object.values(req.files).forEach(fArr => {
+          if (Array.isArray(fArr)) filesToProcess.push(...fArr);
+        });
+      }
+    } else if (req.file) {
+      filesToProcess.push(req.file);
+    }
+
+    if (filesToProcess.length > 0) {
+      const { optimizeUploadedFileToWebp } = require('../utils/imageOptimizer');
+      const newUrls = [];
+      for (const f of filesToProcess) {
+        if (f.mimetype && f.mimetype.startsWith('video/')) {
+          videoUrl = `/api/image?file=${f.filename}`;
+        } else {
+          const webpFilename = await optimizeUploadedFileToWebp(f.path, 2048, 2048, 92);
+          newUrls.push(`/api/image?file=${webpFilename || f.filename}`);
+        }
+      }
+      if (newUrls.length > 0) {
+        imageUrls = Array.from(new Set(newUrls));
+        imageUrl = imageUrls[0];
+        videoUrl = null;
       }
     }
 
     // Also support clearing media
     if (req.body.clearImage === 'true') {
       imageUrl = null;
+      imageUrls = [];
     }
     if (req.body.clearVideo === 'true') {
       videoUrl = null;
     }
 
-    if (!content && !imageUrl && !videoUrl) {
+    if (!content && imageUrls.length === 0 && !videoUrl) {
       return res.status(400).json({ message: 'Content or media is required' });
     }
 
@@ -998,6 +1055,7 @@ exports.updateUserPost = async (req, res) => {
     post.content = content;
     post.title = title || null;
     post.image = imageUrl;
+    post.images = imageUrls;
     post.video = videoUrl;
     post.privacy = privacy || 'public';
     post.feeling = feeling || null;
@@ -1261,7 +1319,7 @@ exports.sharePostToFeed = async (req, res) => {
       sharedPostId: targetPostId,
       authorId: req.user._id,
       authorName: req.user.name || 'User',
-      isVerified: req.user.isEmailVerified || false,
+      isVerified: Boolean(req.user.isVerified || (req.user.verificationBadge && req.user.verificationBadge !== 'none')),
       postType: 'standard'
     });
 

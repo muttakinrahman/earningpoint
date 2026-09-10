@@ -11,6 +11,7 @@ import { saveImageToPhone } from '../utils/downloadHelper';
 import StoryTray from './Story/StoryTray';
 import StoryCreatorModal from './Story/StoryCreatorModal';
 import StoryViewerModal from './Story/StoryViewerModal';
+import PostMediaCarousel from './PostMediaCarousel';
 
 const GRADIENTS_MAP = {
   aurora: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white',
@@ -454,8 +455,8 @@ const ReactionsModal = ({ postId, onClose, onUserClick }) => {
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1">
                       <span className="truncate">{user.name}</span>
-                      {((user.verificationBadge && user.verificationBadge !== 'none') || user.isEmailVerified) && (
-                        <VerifiedBadge size="sm" type={user.verificationBadge || 'blue'} />
+                      {isUserVerified(user) && (
+                        <VerifiedBadge size="sm" type={getUserBadgeType(user)} />
                       )}
                     </p>
                   </div>
@@ -873,58 +874,15 @@ const CommunityPostCard = ({ post, onFollowToggle, onLikeToggle, onCommentClick,
         </div>
       ) : null}
 
-      {/* Media Attachment (Image or Video) */}
-      {post.image && (
-        isProfilePictureUpdate ? (
-          /* Facebook-Style Profile Picture Display - Full 1:1 Image Frame */
-          <div 
-            onClick={() => onImageClick && onImageClick(getImageUrl(post.image))}
-            className="relative w-full aspect-square max-h-[520px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-200/80 dark:border-slate-800 shadow-sm mt-2 select-none cursor-pointer group flex items-center justify-center"
-          >
-            {/* Ambient blurred backdrop for seamless edge blending */}
-            <div 
-              className="absolute inset-0 bg-cover bg-center blur-2xl opacity-40 scale-110 pointer-events-none"
-              style={{ backgroundImage: `url(${getImageUrl(post.image)})` }}
-            />
-            {/* Full Image */}
-            <img 
-              src={getImageUrl(post.image)} 
-              alt="Profile Picture"
-              className="relative w-full h-full object-cover z-10 group-hover:scale-[1.01] transition-transform duration-300"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        ) : isCoverPhotoUpdate ? (
-          /* Facebook-Style Cover Photo Display */
-          <div 
-            onClick={() => onImageClick && onImageClick(getImageUrl(post.image))}
-            className="relative w-full aspect-[16/9] sm:aspect-[2.3/1] max-h-[340px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm mt-2 select-none cursor-pointer group"
-          >
-            <img 
-              src={getImageUrl(post.image)} 
-              alt="Cover Photo"
-              className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        ) : (
-          /* Standard Photo Post */
-          <div 
-            onClick={() => onImageClick && onImageClick(getImageUrl(post.image))}
-            className="rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 mt-2 w-full flex items-center justify-center select-none cursor-pointer hover:opacity-95 transition-opacity"
-          >
-            <img 
-              src={getImageUrl(post.image)} 
-              alt="Post Content"
-              className="w-full h-auto max-h-[580px] object-cover rounded-2xl"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        )
-      )}
+      {/* Media Attachment (Instagram-Style Carousel or Single Photo) */}
+      {((post.images && post.images.length > 0) || post.image) ? (
+        <PostMediaCarousel 
+          images={post.images}
+          singleImage={post.image}
+          postType={isProfilePictureUpdate ? 'profile_picture' : (isCoverPhotoUpdate ? 'cover_photo' : 'standard')}
+          onImageClick={onImageClick}
+        />
+      ) : null}
 
       {post.video && (
         <div className="relative rounded-2xl overflow-hidden bg-slate-900 mt-1 flex items-center justify-center w-full max-h-[500px] cursor-pointer group select-none">
@@ -960,7 +918,7 @@ const CommunityPostCard = ({ post, onFollowToggle, onLikeToggle, onCommentClick,
         const spAuthor = sp.authorId || sp.authorDetails;
         const spAuthorName = spAuthor?.name || sp.authorName || 'User';
         const spAuthorPic = spAuthor?.profilePic || spAuthor?.googleAvatar || spAuthor?.facebookAvatar || '';
-        const spIsVerified = spAuthor?.verificationBadge === 'blue' || spAuthor?.verificationBadge === 'purple' || spAuthor?.verificationBadge === 'golden' || spAuthor?.isEmailVerified || sp.isVerified;
+        const spIsVerified = spAuthor?.verificationBadge === 'blue' || spAuthor?.verificationBadge === 'purple' || spAuthor?.verificationBadge === 'golden' || sp.isVerified;
         const spBadgeType = spAuthor?.verificationBadge === 'golden' ? 'golden' : 'purple';
         const spTimeAgo = formatRelativeTime(sp.createdAt);
         const spImage = sp.image ? getImageUrl(sp.image) : null;
@@ -1850,18 +1808,20 @@ const HomePage = ({ setActiveTab, setSelectedNewsId, setActiveChatPartner, setSe
           {/* Banner */}
           <BannerSection onStartEarning={() => setActiveTab && setActiveTab('Earning')} />
 
-          {/* Facebook Style Story (Day) Tray — Borderless & Compact */}
-          <div className="w-full">
-            <StoryTray
-              stories={stories}
-              currentUser={currentUser}
-              onOpenCreator={() => setShowStoryCreator(true)}
-              onOpenViewer={(user, idx = 0) => {
-                setViewingStoryUser(user);
-                setViewingStoryIndex(idx);
-              }}
-            />
-          </div>
+          {/* Facebook Style Story (Day) Tray — Temporarily hidden, code preserved */}
+          {false && (
+            <div className="w-full">
+              <StoryTray
+                stories={stories}
+                currentUser={currentUser}
+                onOpenCreator={() => setShowStoryCreator(true)}
+                onOpenViewer={(user, idx = 0) => {
+                  setViewingStoryUser(user);
+                  setViewingStoryIndex(idx);
+                }}
+              />
+            </div>
+          )}
 
           {/* Community Feed Section */}
           <div ref={communityFeedRef} className="space-y-4 pt-1">
@@ -1927,9 +1887,8 @@ const HomePage = ({ setActiveTab, setSelectedNewsId, setActiveChatPartner, setSe
                           )}
                           <div className="min-w-0">
                             <div className="flex items-center gap-1">
-                              <span className="text-xs font-black text-slate-850 dark:text-slate-200 truncate leading-tight">{user.name}</span>
-                              {(user.verificationBadge === 'golden' || user.verificationBadge === 'blue' || user.isEmailVerified) && (
-                                <VerifiedBadge size="w-3.5 h-3.5" type={user.verificationBadge === 'golden' ? 'golden' : 'blue'} />
+                              {isUserVerified(user) && (
+                                <VerifiedBadge size="w-3.5 h-3.5" type={getUserBadgeType(user)} />
                               )}
                             </div>
                           </div>

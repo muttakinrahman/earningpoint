@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, ShieldCheck, X, ArrowRight, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
+import { Mail, ShieldCheck, X, ArrowRight, RefreshCw, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { API_BASE } from '../config';
 
 // Step 1 — Enter Email
@@ -136,7 +136,15 @@ const EnterOTPStep = ({ email, onVerify, onResend, loading, resendLoading, onClo
       <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-1 px-2">
         We sent a 6-digit code to
       </p>
-      <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mb-6 text-center break-all">{email}</p>
+      <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mb-4 text-center break-all">{email}</p>
+
+      {/* Spam Folder Reminder Box */}
+      <div className="w-full p-3 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-left flex items-start gap-2.5 mb-5">
+        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="text-[11px] sm:text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
+          <span className="font-bold">Can't find the email?</span> Please check your <span className="font-bold underline decoration-amber-500">Spam or Junk</span> folder. If found there, tap <span className="font-bold text-amber-800 dark:text-amber-100">"Report Not Spam"</span> or move it to your Inbox.
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="w-full space-y-5">
         {/* OTP Boxes */}

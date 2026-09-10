@@ -16,6 +16,7 @@ import Verifications from './pages/Verifications';
 import Badges from './pages/Badges';
 import DatabaseBackup from './pages/DatabaseBackup';
 import AdminManagement from './pages/AdminManagement';
+import ActivityReports from './pages/ActivityReports';
 
 import { API_BASE as GlobalApiBase } from '../config';
 export const API_BASE = GlobalApiBase;
@@ -86,6 +87,7 @@ const AdminApp = () => {
     >
       {activePage === 'dashboard' && <Dashboard {...pageProps} />}
       {activePage === 'users' && <Users {...pageProps} />}
+      {activePage === 'activity' && <ActivityReports {...pageProps} />}
       {activePage === 'transactions' && <Transactions {...pageProps} />}
       {activePage === 'support' && <Support {...pageProps} />}
       {activePage === 'referrals' && <Referrals {...pageProps} />}

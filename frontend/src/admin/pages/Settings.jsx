@@ -398,7 +398,7 @@ const Settings = ({ ADMIN_API, authHeaders, onLogout }) => {
               <label className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-2">Latest Play Store Version</label>
               <input 
                 type="text" 
-                value={globalSettings.appUpdateConfig?.latestAppVersion || '1.0.4'} 
+                value={globalSettings.appUpdateConfig?.latestAppVersion || '1.1.9'} 
                 onChange={(e) => setGlobalSettings({
                   ...globalSettings, 
                   appUpdateConfig: {
@@ -406,7 +406,7 @@ const Settings = ({ ADMIN_API, authHeaders, onLogout }) => {
                     latestAppVersion: e.target.value
                   }
                 })}
-                placeholder="e.g. 1.0.4"
+                placeholder="e.g. 1.1.9"
                 className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm outline-none" 
               />
             </div>
@@ -414,7 +414,7 @@ const Settings = ({ ADMIN_API, authHeaders, onLogout }) => {
               <label className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-2">Min Required App Version</label>
               <input 
                 type="text" 
-                value={globalSettings.appUpdateConfig?.minAppVersion || '1.0.3'} 
+                value={globalSettings.appUpdateConfig?.minAppVersion || '1.1.9'} 
                 onChange={(e) => setGlobalSettings({
                   ...globalSettings, 
                   appUpdateConfig: {
@@ -422,7 +422,7 @@ const Settings = ({ ADMIN_API, authHeaders, onLogout }) => {
                     minAppVersion: e.target.value
                   }
                 })}
-                placeholder="e.g. 1.0.3"
+                placeholder="e.g. 1.1.9"
                 className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm outline-none" 
               />
             </div>

@@ -46,17 +46,20 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
   const [content, setContent] = useState(postToEdit ? postToEdit.content : '');
   const [privacy, setPrivacy] = useState(postToEdit ? postToEdit.privacy : 'public'); // public, friends, private
   const [selectedGradient, setSelectedGradient] = useState(postToEdit && postToEdit.bgGradient ? postToEdit.bgGradient : 'none');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(() => {
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState(() => {
     if (postToEdit) {
       if (postToEdit.video) {
-        return getImageUrl(postToEdit.video);
+        return [{ url: getImageUrl(postToEdit.video), type: 'video' }];
+      }
+      if (postToEdit.images && Array.isArray(postToEdit.images) && postToEdit.images.length > 0) {
+        return postToEdit.images.map(img => ({ url: getImageUrl(img), type: 'image', isExisting: true }));
       }
       if (postToEdit.image) {
-        return getImageUrl(postToEdit.image);
+        return [{ url: getImageUrl(postToEdit.image), type: 'image', isExisting: true }];
       }
     }
-    return null;
+    return [];
   });
   const [selectedFileType, setSelectedFileType] = useState(postToEdit && postToEdit.video ? 'video' : 'image'); // image, video
 
@@ -99,27 +102,64 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type.startsWith('video/')) {
-        showToastNotification("The video option is currently unavailable. However, it will be available very soon.");
-        e.target.value = '';
-        return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (files.some(file => file.type.startsWith('video/'))) {
+      showToastNotification("The video option is currently unavailable. However, it will be available very soon.");
+      e.target.value = '';
+      return;
+    }
+
+    const imgFiles = files.filter(file => file.type.startsWith('image/'));
+    if (imgFiles.length === 0) return;
+
+    setSelectedGradient('none');
+    setSelectedFileType('image');
+
+    const newPreviews = imgFiles.map(file => ({
+      file,
+      url: URL.createObjectURL(file),
+      type: 'image'
+    }));
+
+    setSelectedImages(prev => [...prev, ...imgFiles]);
+    setImagePreviews(prev => [...prev, ...newPreviews]);
+    e.target.value = '';
+  };
+
+  const removeImage = (index) => {
+    setImagePreviews(prev => {
+      const removed = prev[index];
+      if (removed && removed.url && removed.url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(removed.url); } catch (err) {}
       }
-      setSelectedImage(file);
-      setSelectedGradient('none'); // Gradients are incompatible with images
-      const fileUrl = URL.createObjectURL(file);
-      setImagePreview(fileUrl);
-      setSelectedFileType('image');
+      return prev.filter((_, i) => i !== index);
+    });
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    if (postToEdit) {
+      setClearImage(true);
+    }
+  };
+
+  const clearAllMedia = () => {
+    imagePreviews.forEach(item => {
+      if (item.url && item.url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(item.url); } catch (err) {}
+      }
+    });
+    setSelectedImages([]);
+    setImagePreviews([]);
+    if (postToEdit) {
+      if (postToEdit.image) setClearImage(true);
+      if (postToEdit.video) setClearVideo(true);
     }
   };
 
   const selectGradient = (gradId) => {
     setSelectedGradient(gradId);
     if (gradId !== 'none') {
-      // Clear image/video if gradient is selected
-      setSelectedImage(null);
-      setImagePreview(null);
+      clearAllMedia();
     }
   };
 
@@ -150,7 +190,7 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
   };
 
   const handlePostSubmit = async () => {
-    if ((!content.trim() && !selectedImage && !imagePreview) || postingLoading) return;
+    if ((!content.trim() && selectedImages.length === 0 && imagePreviews.length === 0) || postingLoading) return;
 
     setPostingLoading(true);
     if (setPostUploadState) {
@@ -178,8 +218,10 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
     if (taggedFriends.length > 0) {
       formData.append('taggedFriends', JSON.stringify(taggedFriends));
     }
-    if (selectedImage) {
-      formData.append('image', selectedImage);
+    if (selectedImages.length > 0) {
+      selectedImages.forEach(img => {
+        formData.append('images', img);
+      });
     }
     if (postToEdit) {
       if (clearImage) formData.append('clearImage', 'true');
@@ -201,8 +243,7 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
       if (res.ok) {
         setContent('');
         setSelectedGradient('none');
-        setSelectedImage(null);
-        setImagePreview(null);
+        clearAllMedia();
         setFeeling(null);
         setLocation(null);
         setTaggedFriends([]);
@@ -315,7 +356,7 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
           
           <button
             onClick={handlePostSubmit}
-            disabled={(!content.trim() && !selectedImage) || postingLoading}
+            disabled={(!content.trim() && selectedImages.length === 0 && imagePreviews.length === 0) || postingLoading}
             className="px-5 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white font-black text-sm rounded-full shadow-md active:scale-95 transition-all flex items-center gap-2"
           >
             {postingLoading ? (
@@ -401,28 +442,114 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
             ))}
           </div>
 
-          {/* Preview selected Image/Video */}
-          {imagePreview && (
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 max-h-[380px] w-full flex items-center justify-center mt-2 group">
-              {selectedFileType === 'video' ? (
-                <video src={imagePreview} controls className="w-full max-h-[380px] object-contain" />
+          {/* Facebook-Style Multi-Photo Preview Grid with individual delete & add more */}
+          {imagePreviews.length > 0 && (
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-2 mt-2 group">
+              {/* Top action bar: Add more photos & Clear all */}
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-emerald-500" />
+                    {imagePreviews.length} {imagePreviews.length === 1 ? 'Photo' : 'Photos'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-2.5 py-1 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 rounded-full transition-colors flex items-center gap-1"
+                  >
+                    + Add More
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearAllMedia}
+                  className="text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-2 py-0.5 rounded-md transition-colors"
+                >
+                  Remove all
+                </button>
+              </div>
+
+              {/* Grid layout depending on photo count */}
+              {imagePreviews.length === 1 ? (
+                <div className="relative rounded-xl overflow-hidden max-h-[380px] w-full flex items-center justify-center bg-black/5 dark:bg-black/20 group/item">
+                  {imagePreviews[0].type === 'video' ? (
+                    <video src={imagePreviews[0].url} controls className="w-full max-h-[380px] object-contain" />
+                  ) : (
+                    <img src={imagePreviews[0].url} alt="Post preview" className="w-full max-h-[380px] object-cover rounded-xl" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(0)}
+                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-all shadow-md active:scale-90"
+                    title="Remove"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : imagePreviews.length === 2 ? (
+                <div className="grid grid-cols-2 gap-2 max-h-[320px]">
+                  {imagePreviews.map((img, idx) => (
+                    <div key={idx} className="relative rounded-xl overflow-hidden aspect-square bg-black/5 dark:bg-black/20 group/item">
+                      <img src={img.url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-xl" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-all shadow-md active:scale-90"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : imagePreviews.length === 3 ? (
+                <div className="grid grid-cols-2 gap-2 max-h-[380px]">
+                  <div className="relative rounded-xl overflow-hidden aspect-square bg-black/5 dark:bg-black/20 row-span-2">
+                    <img src={imagePreviews[0].url} alt="Preview 1" className="w-full h-full object-cover rounded-xl" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(0)}
+                      className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full shadow-md"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-rows-2 gap-2 h-full">
+                    {imagePreviews.slice(1, 3).map((img, idx) => (
+                      <div key={idx + 1} className="relative rounded-xl overflow-hidden h-[115px] bg-black/5 dark:bg-black/20">
+                        <img src={img.url} alt={`Preview ${idx + 2}`} className="w-full h-full object-cover rounded-xl" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx + 1)}
+                          className="absolute top-1.5 right-1.5 p-1 bg-black/70 hover:bg-black/90 text-white rounded-full shadow-md"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
-                <img src={imagePreview} alt="Uploaded Post Content" className="w-full max-h-[380px] object-cover rounded-2xl" />
+                /* 4 or more images */
+                <div className="grid grid-cols-2 gap-2 max-h-[380px]">
+                  {imagePreviews.slice(0, 4).map((img, idx) => (
+                    <div key={idx} className="relative rounded-xl overflow-hidden aspect-square bg-black/5 dark:bg-black/20">
+                      <img src={img.url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-xl" />
+                      {idx === 3 && imagePreviews.length > 4 && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center text-white font-black text-xl rounded-xl">
+                          +{imagePreviews.length - 3}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full shadow-md z-10"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
-              <button 
-                type="button"
-                onClick={() => {
-                  setSelectedImage(null);
-                  setImagePreview(null);
-                  if (postToEdit) {
-                    if (postToEdit.image) setClearImage(true);
-                    if (postToEdit.video) setClearVideo(true);
-                  }
-                }}
-                className="absolute top-3 right-3 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-all shadow-md active:scale-90"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
           )}
         </div>
@@ -474,6 +601,7 @@ const CreatePostPage = ({ currentUser, onBack, setActiveTab, postToEdit = null, 
               ref={fileInputRef}
               type="file" 
               accept="image/*" 
+              multiple
               onChange={handleImageChange} 
               className="hidden" 
             />

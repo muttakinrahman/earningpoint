@@ -194,6 +194,9 @@ const startServer = async () => {
     const musicRoutes = require('./routes/musicRoutes');
     app.use('/api/music', musicRoutes);
 
+    const activityRoutes = require('./routes/activityRoutes');
+    app.use('/api/activity', activityRoutes);
+
     // Basic Route
     app.get('/', (req, res) => {
       res.send('Zenivio API is running...');

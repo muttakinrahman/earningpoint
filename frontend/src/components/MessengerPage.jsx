@@ -774,7 +774,12 @@ const MessengerPage = ({
   }, [searchQuery, chatUsers]);
 
   // ────────────────── WEBSOCKET SETUP ──────────────────
-  // Setup Group Rooms
+  // Setup Group Rooms — join on mount/chatUsers change, and also on socket reconnect
+  const chatUsersRef = useRef(chatUsers);
+  useEffect(() => { chatUsersRef.current = chatUsers; }, [chatUsers]);
+  const activePartnerRef2 = useRef(activePartner);
+  useEffect(() => { activePartnerRef2.current = activePartner; }, [activePartner]);
+
   useEffect(() => {
     if (socket && chatUsers.length > 0) {
       const groupChats = chatUsers.filter(u => u.isGroup);
@@ -783,6 +788,41 @@ const MessengerPage = ({
       });
     }
   }, [socket, chatUsers]);
+
+  // On socket reconnect: rejoin rooms and reload active chat history
+  useEffect(() => {
+    if (!socket) return;
+    const handleReconnect = () => {
+      // Rejoin all group rooms
+      const groups = chatUsersRef.current.filter(u => u.isGroup);
+      groups.forEach(g => {
+        socket.emit('join_group_room', { groupId: g._id });
+      });
+      // Reload active chat to avoid missing messages during disconnect
+      const partner = activePartnerRef2.current;
+      if (partner) {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const endpoint = partner.isGroup
+          ? `${API_BASE}/api/messages/history/group/${partner._id}`
+          : `${API_BASE}/api/messages/history/${partner._id}`;
+        fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(history => { if (history) setMessages(history); })
+          .catch(() => {});
+      }
+      // Refresh user list
+      fetchUsers();
+    };
+    socket.on('reconnect', handleReconnect);
+    // Also listen for connect event (fired on both initial connect and reconnect)
+    socket.on('connect', handleReconnect);
+    return () => {
+      socket.off('reconnect', handleReconnect);
+      socket.off('connect', handleReconnect);
+    };
+  }, [socket]);
+
 
   // Listen for socket events
   useEffect(() => {
@@ -994,7 +1034,7 @@ const MessengerPage = ({
             if (d?.user) {
               setActivePartner(prev => (prev && prev._id === partner._id) ? {
                 ...prev,
-                verificationBadge: d.user.verificationBadge || (d.user.isEmailVerified ? 'blue' : 'none'),
+                verificationBadge: d.user.verificationBadge || 'none',
                 isEmailVerified: d.user.isEmailVerified,
                 profilePic: d.user.profilePic || prev.profilePic,
                 name: d.user.name || prev.name
@@ -1875,8 +1915,8 @@ const MessengerPage = ({
             <div className="flex-1 overflow-y-auto w-full px-4.5 pb-24 bg-white dark:bg-slate-950">
               <PullToRefresh onRefresh={handleRefresh} refreshing={refreshing}>
                 
-                {/* ── STORIES ROW ── */}
-                {(() => {
+                {/* ── STORIES ROW — temporarily hidden, code preserved ── */}
+                {false && (() => {
                   const myStoryUser = stories.find(s => s._id?.toString() === currentUser?._id?.toString());
                   const STORY_BG_PRESETS = [
                     'linear-gradient(135deg, #7C3AED 0%, #2563EB 100%)',
@@ -2048,7 +2088,7 @@ const MessengerPage = ({
                             <div className="min-w-0 flex-1">
                               <h3 className="font-black text-slate-800 dark:text-slate-100 text-[15px] truncate leading-tight flex items-center gap-1">
                                 <span className="truncate">{chat.name}</span>
-                                {((chat.verificationBadge === 'blue' || chat.verificationBadge === 'purple' || chat.verificationBadge === 'golden') || (chat.isEmailVerified && chat.verificationBadge !== 'none')) && (
+                                {(chat.verificationBadge === 'blue' || chat.verificationBadge === 'purple' || chat.verificationBadge === 'golden') && (
                                   <VerifiedBadge type={chat.verificationBadge === 'golden' ? 'golden' : 'purple'} iconClassName="w-3.5 h-3.5 flex-shrink-0" />
                                 )}
                               </h3>
@@ -2101,7 +2141,7 @@ const MessengerPage = ({
                                   <div className="flex items-center justify-between">
                                     <h2 className="text-[14px] font-extrabold text-slate-900 dark:text-white truncate flex items-center gap-1">
                                       <span className="truncate">{user.name}</span>
-                                      {((user.verificationBadge === 'blue' || user.verificationBadge === 'purple' || user.verificationBadge === 'golden') || (user.isEmailVerified && user.verificationBadge !== 'none')) && (
+                                      {(user.verificationBadge === 'blue' || user.verificationBadge === 'purple' || user.verificationBadge === 'golden') && (
                                         <VerifiedBadge type={user.verificationBadge === 'golden' ? 'golden' : 'purple'} iconClassName="w-3.5 h-3.5 flex-shrink-0" />
                                       )}
                                     </h2>
@@ -2172,7 +2212,7 @@ const MessengerPage = ({
                 <div>
                   <h1 className="text-base sm:text-lg font-black text-slate-855 dark:text-white flex items-center gap-1.5 leading-tight">
                     <span>{activePartner.name}</span>
-                    {((activePartner.verificationBadge === 'blue' || activePartner.verificationBadge === 'purple' || activePartner.verificationBadge === 'golden') || (activePartner.isEmailVerified && activePartner.verificationBadge !== 'none')) && (
+                    {(activePartner.verificationBadge === 'blue' || activePartner.verificationBadge === 'purple' || activePartner.verificationBadge === 'golden') && (
                       <VerifiedBadge type={activePartner.verificationBadge === 'golden' ? 'golden' : 'purple'} iconClassName="w-4 h-4 flex-shrink-0" />
                     )}
                   </h1>
@@ -2263,7 +2303,7 @@ const MessengerPage = ({
                   </div>
                   <h3 className="font-black text-slate-800 dark:text-white flex items-center justify-center gap-1">
                     <span>{activePartner.name}</span>
-                    {((activePartner.verificationBadge === 'blue' || activePartner.verificationBadge === 'purple' || activePartner.verificationBadge === 'golden') || (activePartner.isEmailVerified && activePartner.verificationBadge !== 'none')) && (
+                    {(activePartner.verificationBadge === 'blue' || activePartner.verificationBadge === 'purple' || activePartner.verificationBadge === 'golden') && (
                       <VerifiedBadge type={activePartner.verificationBadge === 'golden' ? 'golden' : 'purple'} iconClassName="w-4 h-4 flex-shrink-0" />
                     )}
                   </h3>
@@ -3009,8 +3049,7 @@ const MessengerPage = ({
                           )}
                           <div>
                             <p className="font-bold text-sm leading-tight flex items-center gap-1">
-                              <span>{user.name}</span>
-                              {((user.verificationBadge === 'blue' || user.verificationBadge === 'purple' || user.verificationBadge === 'golden') || (user.isEmailVerified && user.verificationBadge !== 'none')) && (
+                              {(user.verificationBadge === 'blue' || user.verificationBadge === 'purple' || user.verificationBadge === 'golden') && (
                                 <VerifiedBadge type={user.verificationBadge === 'golden' ? 'golden' : 'purple'} iconClassName="w-3.5 h-3.5 flex-shrink-0" />
                               )}
                             </p>

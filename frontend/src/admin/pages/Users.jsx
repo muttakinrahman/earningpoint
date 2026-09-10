@@ -151,8 +151,7 @@ const Users = ({ ADMIN_API, authHeaders }) => {
                       </div>
                       <div className="min-w-0">
                         <div className="text-white font-semibold text-xs flex items-center gap-1 truncate max-w-[120px]">
-                          {u.name || 'No Name'}
-                          {(u.verificationBadge === 'blue' || u.verificationBadge === 'purple' || u.verificationBadge === 'golden' || u.isEmailVerified) && (
+                          {(u.verificationBadge === 'blue' || u.verificationBadge === 'purple' || u.verificationBadge === 'golden') && (
                             <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-black ${u.verificationBadge === 'golden' ? 'bg-amber-500 text-white' : 'bg-purple-600 text-white'}`}>
                               ✓
                             </span>

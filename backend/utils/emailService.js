@@ -42,18 +42,24 @@ const createTransporter = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. VERIFICATION CODE EMAIL
-// ─────────────────────────────────────────────────────────────────────────────
 const sendVerificationEmail = async (toEmail, code) => {
   const transporter = createTransporter();
   const senderEmail = process.env.EMAIL_USER || 'no-reply@zenivio.it.com';
   const replyToEmail = process.env.REPLY_TO || 'no-reply@zenivio.it.com';
+  const messageId = `<zenivio-verify-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@zenivio.it.com>`;
 
   const mailOptions = {
     from: `"Zenivio" <${senderEmail}>`,
     replyTo: replyToEmail,
     to: toEmail,
-    subject: `${code} is your Zenivio verification code`,
+    subject: `Zenivio - Your verification code is ${code}`,
+    messageId,
+    headers: {
+      'Auto-Submitted': 'auto-generated',
+      'X-Auto-Response-Suppress': 'All',
+      'List-Unsubscribe': `<mailto:${replyToEmail}?subject=Unsubscribe>`,
+      'X-Entity-Ref-ID': messageId,
+    },
     text: `Your Zenivio verification code is: ${code}\n\nUse this 6-digit code to verify your email address. This code expires in 10 minutes.\n\nSecurity Notice: Never share this code with anyone. Zenivio support will never ask for your verification code.\n\nIf you did not request this, you can safely ignore this email.\n\nZenivio Technologies - https://zenivio.it.com`,
     html: `
 <!DOCTYPE html>
@@ -278,12 +284,20 @@ const sendPasswordResetOTPEmail = async (toEmail, code) => {
 
   const senderEmail = process.env.EMAIL_USER || 'no-reply@zenivio.it.com';
   const replyToEmail = process.env.REPLY_TO || 'no-reply@zenivio.it.com';
+  const messageId = `<zenivio-reset-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@zenivio.it.com>`;
 
   const mailOptions = {
     from: `"Zenivio" <${senderEmail}>`,
     replyTo: replyToEmail,
     to: toEmail,
-    subject: `${code} is your Zenivio password reset code`,
+    subject: `Zenivio - Password reset code: ${code}`,
+    messageId,
+    headers: {
+      'Auto-Submitted': 'auto-generated',
+      'X-Auto-Response-Suppress': 'All',
+      'List-Unsubscribe': `<mailto:${replyToEmail}?subject=Unsubscribe>`,
+      'X-Entity-Ref-ID': messageId,
+    },
     text: `Your Zenivio password reset code is: ${code}\n\nUse this 6-digit code to reset your account password. This code expires in 10 minutes.\n\nSecurity Notice: Never share this code with anyone. Zenivio support will never ask for your verification code.\n\nIf you did not request this, you can safely ignore this email.\n\nZenivio Technologies - https://zenivio.it.com`,
     html: `
 <!DOCTYPE html>

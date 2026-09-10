@@ -41,6 +41,7 @@ import ShareModal from './ShareModal';
 import ImagePreviewModal from './ImagePreviewModal';
 import ImageCropModal from './ImageCropModal';
 import VerifyIn2MinutesModal from './VerifyIn2MinutesModal';
+import PostMediaCarousel from './PostMediaCarousel';
 
 // Reactions List Modal (Who Reacted / Liked on Profile Posts)
 const ProfileReactionsModal = ({ postId, onClose, onUserClick }) => {
@@ -102,8 +103,8 @@ const ProfileReactionsModal = ({ postId, onClose, onUserClick }) => {
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1">
                       <span className="truncate">{user.name}</span>
-                      {((user.verificationBadge && user.verificationBadge !== 'none') || user.isEmailVerified) && (
-                        <VerifiedBadge size="sm" type={user.verificationBadge || 'blue'} />
+                      {isUserVerified(user) && (
+                        <VerifiedBadge size="sm" type={getUserBadgeType(user)} />
                       )}
                     </p>
                   </div>
@@ -2511,47 +2512,19 @@ const PublicProfilePage = ({ userId, onBack, currentUser, isOwnProfile, setActiv
                 </p>
               )}
 
-              {selectedDetailPost.image && (
-                (selectedDetailPost.postType === 'profile_picture' || selectedDetailPost.content?.toLowerCase().includes('updated their profile picture')) ? (
-                  <div 
-                    onClick={() => setPreviewImageUrl(selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`)}
-                    className="relative w-full aspect-square max-h-[520px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-200/80 dark:border-slate-800 shadow-sm cursor-pointer group flex items-center justify-center"
-                  >
-                    <div 
-                      className="absolute inset-0 bg-cover bg-center blur-2xl opacity-40 scale-125 pointer-events-none"
-                      style={{ backgroundImage: `url(${selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`})` }}
-                    />
-                    <img 
-                      src={selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`} 
-                      alt="Profile Picture"
-                      className="relative w-full h-full object-cover z-10 group-hover:scale-[1.01] transition-transform duration-300"
-                    />
-                  </div>
-                ) : (selectedDetailPost.postType === 'cover_photo' || selectedDetailPost.content?.toLowerCase().includes('updated their cover photo')) ? (
-                  <div 
-                    onClick={() => setPreviewImageUrl(selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`)}
-                    className="relative w-full aspect-[16/9] sm:aspect-[2.3/1] max-h-[340px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm cursor-pointer"
-                  >
-                    <img 
-                      src={selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`} 
-                      alt="Cover Photo"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div 
-                    onClick={() => setPreviewImageUrl(selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') ? selectedDetailPost.image : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`)}
-                    className="rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 flex items-center justify-center w-full max-h-[580px] cursor-pointer hover:opacity-95 transition-opacity"
-                  >
-                    <img 
-                      src={selectedDetailPost.image.startsWith('http') || selectedDetailPost.image.startsWith('/api') || selectedDetailPost.image.startsWith('data:') 
-                        ? selectedDetailPost.image 
-                        : `${API_BASE}/api/image?file=${encodeURIComponent(selectedDetailPost.image)}`} 
-                      alt="Attachment"
-                      className="w-full h-auto object-cover max-h-[580px] rounded-2xl"
-                    />
-                  </div>
-                )
+              {((selectedDetailPost.images && selectedDetailPost.images.length > 0) || selectedDetailPost.image) && (
+                <PostMediaCarousel 
+                  images={selectedDetailPost.images}
+                  singleImage={selectedDetailPost.image}
+                  postType={
+                    (selectedDetailPost.postType === 'profile_picture' || selectedDetailPost.content?.toLowerCase().includes('updated their profile picture'))
+                      ? 'profile_picture'
+                      : (selectedDetailPost.postType === 'cover_photo' || selectedDetailPost.content?.toLowerCase().includes('updated their cover photo'))
+                      ? 'cover_photo'
+                      : 'standard'
+                  }
+                  onImageClick={setPreviewImageUrl}
+                />
               )}
 
               {/* Embedded Shared Post in Detail Modal */}
@@ -2559,8 +2532,7 @@ const PublicProfilePage = ({ userId, onBack, currentUser, isOwnProfile, setActiv
                 const sp = selectedDetailPost.sharedPostId;
                 const spAuthor = sp.authorId || sp.authorDetails;
                 const spAuthorName = spAuthor?.name || sp.authorName || 'User';
-                const spAuthorPic = spAuthor?.profilePic || spAuthor?.googleAvatar || spAuthor?.facebookAvatar || '';
-                const spIsVerified = spAuthor?.verificationBadge === 'blue' || spAuthor?.verificationBadge === 'purple' || spAuthor?.verificationBadge === 'golden' || spAuthor?.isEmailVerified || sp.isVerified;
+                const spIsVerified = spAuthor?.verificationBadge === 'blue' || spAuthor?.verificationBadge === 'purple' || spAuthor?.verificationBadge === 'golden' || sp.isVerified;
                 const spBadgeType = spAuthor?.verificationBadge === 'golden' ? 'golden' : 'purple';
                 const spTimeAgo = formatRelativeTime(sp.createdAt);
                 const spImage = sp.image ? getImageUrl(sp.image) : null;

@@ -12,7 +12,8 @@ import {
   RotateCw,
   Sparkles,
   KeyRound,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 
 const COUNTRY_CODES = [
@@ -922,6 +923,14 @@ export default function VerifyIn2MinutesModal({ isOpen, onClose, onSuccess, init
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
                       We sent a 6-digit code to <strong className="text-slate-800 dark:text-slate-200">{emailInput || verifiedEmail}</strong>
                     </p>
+                  </div>
+
+                  {/* Spam Folder Reminder Box */}
+                  <div className="p-3 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-left flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] sm:text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
+                      <span className="font-bold">Can't find the email?</span> Please check your <span className="font-bold underline decoration-amber-500">Spam or Junk</span> folder. If found there, tap <span className="font-bold text-amber-800 dark:text-amber-100">"Report Not Spam"</span> or move it to your Inbox.
+                    </div>
                   </div>
 
                   {/* 6 Digit Inputs */}
